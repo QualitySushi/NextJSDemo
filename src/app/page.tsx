@@ -2,6 +2,7 @@ import Image from "next/image";
 import Header from './components/Header';
 import Footer from './components/Footer';
 import BoidsSimulation from './components/BoidsSimulation';
+import SatelliteGlobe from './components/SatelliteGlobe';
 
 export default function Home() {
   return (
@@ -24,10 +25,13 @@ export default function Home() {
               Polyglot architecture bridging Next.js, Express, and Python compute layers.
             </h1>
             <p className="max-w-md text-lg leading-8 text-muted">
-              Explore the live NumPy-accelerated Boids simulation powered via WebSocket gateway routing below.
+              Explore the live NumPy-accelerated Boids simulation and real-time satellite telemetry 3D globe below.
             </p>
           </div>
         </main>
+
+        {/* Embedded Satellite Telemetry Globe */}
+        <SatelliteGlobe />
 
         {/* Embedded Boids Simulation */}
         <BoidsSimulation />

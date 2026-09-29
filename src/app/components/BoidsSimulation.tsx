@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 export default function BoidsSimulation() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -10,21 +10,44 @@ export default function BoidsSimulation() {
   const [cohesion, setCohesion] = useState<number>(1.0);
   
   const wsRef = useRef<WebSocket | null>(null);
+  
+  // Use refs for weights to avoid stale closures inside the WebSocket message listener or sliders
+  const weightsRef = useRef({ separation: 1.5, alignment: 1.0, cohesion: 1.0 });
+
+  const sendWeights = useCallback((sep: number, ali: number, coh: number) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          separation_weight: sep,
+          alignment_weight: ali,
+          cohesion_weight: coh,
+        })
+      );
+    }
+  }, []);
 
   useEffect(() => {
-    // Connect to the same Express WebSocket gateway used by Electron
-    const ws = new WebSocket('ws://localhost:5000');
+    // Connect to the Express WebSocket gateway
+    const ws = new WebSocket('ws://localhost:4000/ws/simulation');
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return;
+
       setStatus('Connected to Compute Gateway');
+      // Send initial weights upon connection
+      sendWeights(weightsRef.current.separation, weightsRef.current.alignment, weightsRef.current.cohesion);
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return;
+
       setStatus('Disconnected from Gateway');
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
+
       setStatus('WebSocket Connection Error');
     };
 
@@ -41,7 +64,7 @@ export default function BoidsSimulation() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Draw individual boid particles
-        if (data.particles) {
+        if (data.particles && Array.isArray(data.particles)) {
           ctx.fillStyle = '#38bdf8';
           for (const p of data.particles) {
             ctx.beginPath();
@@ -57,23 +80,27 @@ export default function BoidsSimulation() {
     return () => {
       ws.close();
     };
-  }, []);
+  }, [sendWeights]);
 
   // Transmit live weight modifications back through the proxy to Python
   const handleSliderChange = (type: string, val: number) => {
-    if (type === 'sep') setSeparation(val);
-    if (type === 'align') setAlignment(val);
-    if (type === 'coh') setCohesion(val);
+    let newSep = weightsRef.current.separation;
+    let newAli = weightsRef.current.alignment;
+    let newCoh = weightsRef.current.cohesion;
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          separation_weight: type === 'sep' ? val : separation,
-          alignment_weight: type === 'align' ? val : alignment,
-          cohesion_weight: type === 'coh' ? val : cohesion,
-        })
-      );
+    if (type === 'sep') {
+      setSeparation(val);
+      newSep = val;
+    } else if (type === 'align') {
+      setAlignment(val);
+      newAli = val;
+    } else if (type === 'coh') {
+      setCohesion(val);
+      newCoh = val;
     }
+
+    weightsRef.current = { separation: newSep, alignment: newAli, cohesion: newCoh };
+    sendWeights(newSep, newAli, newCoh);
   };
 
   return (
