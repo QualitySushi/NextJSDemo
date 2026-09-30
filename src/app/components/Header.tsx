@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Dropdown from './Dropdown';
 import ThemeToggleItem from './forms/ThemeToggleItem';
-import { useCart } from '../context/CartContext'; // Import the context hook
+import { useCart } from '../context/CartContext';
+import { useAuth } from '@/app/context/AuthContext';
 
 export default function Header(){
     const [isDarkMode, setIsDarkMode] = useState(false);
-    const { cartCount } = useCart(); // Pull cartCount directly from global context
+    const { cartCount } = useCart(); 
+    const { loggedIn, user, logout } = useAuth();
 
     // On mount, check local storage or system preference
     useEffect(() => {
@@ -67,7 +69,7 @@ export default function Header(){
                         <span className="ml-1.5 text-xs font-bold">{cartCount}</span>
                     </Link>
 
-                    {/* Preferences Dropdown */}
+                    {/* Preferences & Account Dropdown */}
                     <Dropdown triggerLabel="Settings">
                         <div className="px-4 py-2 border-b border-border">
                             <p className="text-[10px] font-semibold tracking-wider text-muted uppercase">Preferences</p>
@@ -76,6 +78,44 @@ export default function Header(){
                             isDarkMode={isDarkMode} 
                             onToggle={handleToggle} 
                         />
+
+                        {/* Authentication Options in Dropdown */}
+                        <div className="px-4 py-2 border-t border-b border-border mt-1">
+                            <p className="text-[10px] font-semibold tracking-wider text-muted uppercase">Account</p>
+                        </div>
+
+                        {loggedIn ? (
+                            <>
+                                <div className="px-4 py-2 text-xs text-foreground font-mono truncate">
+                                    User: <strong className="text-cyan-500">{user}</strong>
+                                </div>
+                                <Link
+                                    href="/profile"
+                                    className="block px-4 py-2 text-xs text-foreground hover:bg-border/55 transition-colors"
+                                >
+                                    View Profile
+                                </Link>
+                                <Link
+                                    href="/history"
+                                    className="block px-4 py-2 text-xs text-foreground hover:bg-border/55 transition-colors"
+                                >
+                                    Simulation History
+                                </Link>
+                                <button
+                                    onClick={logout}
+                                    className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-border/55 transition-colors"
+                                >
+                                    Log Out
+                                </button>
+                            </>
+                        ) : (
+                            <Link
+                                href="/auth"
+                                className="block px-4 py-2 text-xs font-medium text-cyan-500 hover:bg-border/55 transition-colors"
+                            >
+                                Log In / Register
+                            </Link>
+                        )}
                     </Dropdown>
                 </nav>
             </div>

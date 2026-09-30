@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useAuth } from '@/app/context/AuthContext';
 
 export default function MaritimeMesh() {
+  const { loggedIn, user } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<string>('Connecting...');
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [modeInfo, setModeInfo] = useState<{ isLive: boolean; count: number; bbox: number[][] | null }>({
     isLive: false,
     count: 0,
@@ -54,7 +57,7 @@ export default function MaritimeMesh() {
   }, [redrawCanvas]);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:4000/ws/maritime');
+    const ws = new WebSocket(`ws://${window.location.host}/ws/maritime`);
 
     ws.onopen = () => {
       setStatus('Connected to Maritime Stream');
@@ -173,7 +176,43 @@ export default function MaritimeMesh() {
     zoomRef.current = 1.0;
     panRef.current = { x: 0, y: 0 };
     setZoomDisplay(1.0);
+    setSaveStatus(null);
     redrawCanvas();
+  };
+
+  const handleSaveConfiguration = async () => {
+    if (!loggedIn) {
+      setSaveStatus('Please log in via the navigation header to save configurations.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/v1/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          simulation_type: 'maritime',
+          sub_type: modeInfo.isLive ? 'live_ais' : 'smooth_drift',
+          configuration: {
+            zoom: zoomDisplay,
+            pan: panRef.current,
+            vesselCount: modeInfo.count,
+            bbox: modeInfo.bbox,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSaveStatus('Maritime mesh configuration saved to your account history!');
+      } else {
+        setSaveStatus('Failed to save configuration.');
+      }
+    } catch (err) {
+      console.error('Error saving history:', err);
+      setSaveStatus('Network error while saving history.');
+    }
   };
 
   return (
@@ -223,6 +262,30 @@ export default function MaritimeMesh() {
           className="w-full h-auto max-w-full rounded bg-[#0f172a] shadow-inner pointer-events-none"
         />
       </div>
+
+      {/* Backend Integration: Save Configuration Toolbar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-lg gap-3">
+        <div className="text-xs text-slate-300">
+          {loggedIn ? (
+            <span>Logged in as <strong className="text-cyan-400">{user}</strong>. You can persist current maritime grid state to your profile history.</span>
+          ) : (
+            <span className="text-slate-400">Log in to save this maritime simulation state to your PostgreSQL session history.</span>
+          )}
+        </div>
+
+        <button
+          onClick={handleSaveConfiguration}
+          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded transition shadow disabled:opacity-50"
+        >
+          Save to History
+        </button>
+      </div>
+
+      {saveStatus && (
+        <div className="text-xs text-center font-medium text-cyan-300 bg-slate-900/50 py-1.5 rounded border border-cyan-900/50">
+          {saveStatus}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,13 +2,16 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { useAuth } from '@/app/context/AuthContext';
 
 export default function SatelliteGlobe() {
+  const { loggedIn, user } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('Connecting to Tracker...');
   const [statusBg, setStatusBg] = useState('#334155');
   const [satellites, setSatellites] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   
   // Telemetry details readout state
   const [coords, setCoords] = useState({ x: '--', y: '--', z: '--', time: '--' });
@@ -141,6 +144,7 @@ export default function SatelliteGlobe() {
   const fetchSatelliteData = async () => {
     setStatus('Fetching Data Snapshot...');
     setStatusBg('#334155');
+    setSaveStatus(null);
     try {
       const res = await fetch('http://localhost:8000/api/satellites');
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -223,6 +227,41 @@ export default function SatelliteGlobe() {
     updateSceneMeshes(satellites, newId);
   };
 
+  const handleSaveConfiguration = async () => {
+    if (!loggedIn) {
+      setSaveStatus('Please log in via the navigation header to save telemetry configurations.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/v1/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          simulation_type: 'satellite',
+          sub_type: 'orbital_globe',
+          configuration: {
+            selectedId,
+            coordinates: coords,
+            sphericalView: sphericalRef.current,
+            totalSatellitesTracked: satellites.length,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSaveStatus('Satellite telemetry state saved to your account history!');
+      } else {
+        setSaveStatus('Failed to save configuration.');
+      }
+    } catch (err) {
+      console.error('Error saving history:', err);
+      setSaveStatus('Network error while saving history.');
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl p-6 bg-card border border-border rounded-xl shadow-sm my-8">
       <h3 className="text-xl font-semibold text-foreground mb-2">Orbital Mechanics & Proximity Mesh (Live 3D View)</h3>
@@ -275,6 +314,30 @@ export default function SatelliteGlobe() {
           <div ref={containerRef} className="w-full h-112.5 rounded cursor-grab active:cursor-grabbing" />
         </div>
       </div>
+
+      {/* Backend Integration: Save Configuration Toolbar */}
+      <div className="mt-6 flex flex-col sm:flex-row items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-lg gap-3">
+        <div className="text-xs text-slate-300">
+          {loggedIn ? (
+            <span>Logged in as <strong className="text-cyan-400">{user}</strong>. You can persist current satellite tracking telemetry to your profile history.</span>
+          ) : (
+            <span className="text-slate-400">Log in to save this orbital simulation snapshot to your PostgreSQL session history.</span>
+          )}
+        </div>
+
+        <button
+          onClick={handleSaveConfiguration}
+          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded transition shadow disabled:opacity-50"
+        >
+          Save to History
+        </button>
+      </div>
+
+      {saveStatus && (
+        <div className="mt-3 text-xs text-center font-medium text-cyan-300 bg-slate-900/50 py-1.5 rounded border border-cyan-900/50">
+          {saveStatus}
+        </div>
+      )}
     </div>
   );
 }

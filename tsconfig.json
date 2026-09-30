@@ -5,6 +5,9 @@
     //   "@/styles/*": ["styles/*"],
     //   "@/components/*": ["components/*"]
     // },
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "target": "ES2017",
     "lib": [
       "dom",

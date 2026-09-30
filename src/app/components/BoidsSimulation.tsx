@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useAuth } from '@/app/context/AuthContext';
 
 export default function BoidsSimulation() {
+  const { loggedIn, user } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<string>('Connecting to Gateway...');
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  
   const [separation, setSeparation] = useState<number>(1.5);
   const [alignment, setAlignment] = useState<number>(1.0);
   const [cohesion, setCohesion] = useState<number>(1.0);
@@ -27,8 +31,8 @@ export default function BoidsSimulation() {
   }, []);
 
   useEffect(() => {
-    // Connect to the Express WebSocket gateway
-    const ws = new WebSocket('ws://localhost:4000/ws/simulation');
+    // Connect to the Express WebSocket gateway via Next.js proxy/rewrites
+    const ws = new WebSocket(`ws://${window.location.host}/ws/simulation`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -100,7 +104,38 @@ export default function BoidsSimulation() {
     }
 
     weightsRef.current = { separation: newSep, alignment: newAli, cohesion: newCoh };
+    setSaveStatus(null);
     sendWeights(newSep, newAli, newCoh);
+  };
+
+  const handleSaveConfiguration = async () => {
+    if (!loggedIn) {
+      setSaveStatus('Please log in via the navigation header to save configurations.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/v1/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          simulation_type: 'boids',
+          sub_type: 'flocking',
+          configuration: weightsRef.current,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSaveStatus('Boids configuration saved to your account history!');
+      } else {
+        setSaveStatus('Failed to save configuration.');
+      }
+    } catch (err) {
+      console.error('Error saving history:', err);
+      setSaveStatus('Network error while saving history.');
+    }
   };
 
   return (
@@ -174,6 +209,30 @@ export default function BoidsSimulation() {
           />
         </div>
       </div>
+
+      {/* Backend Integration: Save Configuration Toolbar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-lg gap-3">
+        <div className="text-xs text-slate-300">
+          {loggedIn ? (
+            <span>Logged in as <strong className="text-cyan-400">{user}</strong>. You can persist current flocking weights to your profile history.</span>
+          ) : (
+            <span className="text-slate-400">Log in to save this boids simulation state to your PostgreSQL session history.</span>
+          )}
+        </div>
+
+        <button
+          onClick={handleSaveConfiguration}
+          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded transition shadow disabled:opacity-50"
+        >
+          Save to History
+        </button>
+      </div>
+
+      {saveStatus && (
+        <div className="text-xs text-center font-medium text-cyan-300 bg-slate-900/50 py-1.5 rounded border border-cyan-900/50">
+          {saveStatus}
+        </div>
+      )}
     </div>
   );
 }
